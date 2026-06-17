@@ -1,0 +1,21 @@
+[package]
+name = "okflint"
+version = "0.1.0"
+edition = "2021"
+description = "A dependency-free linter for Open Knowledge Format (OKF) v0.1 bundles"
+license = "Apache-2.0"
+repository = "https://github.com/2matzzz/okflint"
+readme = "README.md"
+keywords = ["okf", "linter", "knowledge", "markdown"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "okflint"
+path = "src/main.rs"
+
+[lib]
+name = "okflint"
+path = "src/lib.rs"
+
+[profile.release]
+strip = true
