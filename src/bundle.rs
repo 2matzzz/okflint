@@ -1,5 +1,6 @@
 //! Walking an OKF bundle and deciding which files to lint.
 
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -57,6 +58,40 @@ pub fn collect_markdown(root: &Path, ignore: &Ignore) -> io::Result<Vec<PathBuf>
     walk(root, root, ignore, &mut out)?;
     out.sort();
     Ok(out)
+}
+
+/// Collect every file path in the bundle (relative, `/`-separated) into a set,
+/// for O(1) link-target existence checks without a `stat` syscall per link.
+///
+/// Unlike [`collect_markdown`], this includes files of any extension and files
+/// excluded by `.okfignore` (a link may legitimately point at, say, an ignored
+/// `README.md` or an image). Only `.git` is skipped, as nothing links into it.
+pub fn collect_all_files(root: &Path) -> io::Result<HashSet<String>> {
+    let mut set = HashSet::new();
+    walk_all(root, root, &mut set)?;
+    Ok(set)
+}
+
+fn walk_all(root: &Path, dir: &Path, set: &mut HashSet<String>) -> io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.file_name() == *".git" {
+            continue;
+        }
+        let path = entry.path();
+        let ft = entry.file_type()?;
+        if ft.is_dir() {
+            walk_all(root, &path, set)?;
+        } else if ft.is_file() {
+            let rel = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            set.insert(rel);
+        }
+    }
+    Ok(())
 }
 
 fn walk(root: &Path, dir: &Path, ignore: &Ignore, out: &mut Vec<PathBuf>) -> io::Result<()> {

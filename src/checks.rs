@@ -9,6 +9,7 @@
 //! - OKF006  `timestamp` field is not a valid ISO 8601 value  (warning)
 //! - OKF007  broken internal link  (warning; OKF consumers must tolerate)
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::diagnostic::Diagnostic;
@@ -90,7 +91,11 @@ pub fn check_timestamp(rel: &str, doc: &Doc, out: &mut Vec<Diagnostic>) {
 }
 
 /// OKF007 — internal `.md` links that do not resolve to a file.
-pub fn check_links(root: &Path, rel: &str, content: &str, out: &mut Vec<Diagnostic>) {
+///
+/// Existence is checked against `files` (the precomputed set of all
+/// bundle-relative paths) rather than a `stat` per link, so a link-dense bundle
+/// costs no extra syscalls.
+pub fn check_links(files: &HashSet<String>, rel: &str, content: &str, out: &mut Vec<Diagnostic>) {
     let file_dir = Path::new(rel).parent().map(Path::to_path_buf).unwrap_or_default();
     let mut in_code_block = false;
     for (idx, line) in content.lines().enumerate() {
@@ -111,12 +116,14 @@ pub fn check_links(root: &Path, rel: &str, content: &str, out: &mut Vec<Diagnost
             if !cleaned.contains(".md") {
                 continue;
             }
-            let candidate = if let Some(stripped) = cleaned.strip_prefix('/') {
-                root.join(stripped)
+            // Resolve to a bundle-relative, lexically-normalized key.
+            let rel_path = if let Some(stripped) = cleaned.strip_prefix('/') {
+                PathBuf::from(stripped)
             } else {
-                root.join(&file_dir).join(cleaned)
+                file_dir.join(cleaned)
             };
-            if !normalize(&candidate).exists() {
+            let key = normalize(&rel_path).to_string_lossy().replace('\\', "/");
+            if !files.contains(&key) {
                 out.push(Diagnostic::warning(
                     rel,
                     Some(idx + 1),

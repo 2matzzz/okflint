@@ -30,6 +30,8 @@ pub fn lint(root: &Path) -> io::Result<Vec<Diagnostic>> {
 
     let ignore = bundle::Ignore::load(root);
     let files = bundle::collect_markdown(root, &ignore)?;
+    // All bundle paths, for O(1) link-existence checks (no stat per link).
+    let all_files = bundle::collect_all_files(root)?;
 
     let mut diags = Vec::new();
     for path in &files {
@@ -61,7 +63,7 @@ pub fn lint(root: &Path) -> io::Result<Vec<Diagnostic>> {
         }
 
         checks::check_timestamp(&rel, &doc, &mut diags);
-        checks::check_links(root, &rel, &content, &mut diags);
+        checks::check_links(&all_files, &rel, &content, &mut diags);
     }
 
     diags.sort_by(|a, b| a.path.cmp(&b.path).then(a.line.cmp(&b.line)));
