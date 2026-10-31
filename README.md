@@ -58,15 +58,18 @@ families (`sources`, `generated`, `verified`, `status`, `stale_after`,
 optional and only checked when present — except `runtime`, which is required
 for `type: Attested Computation`.
 
-## `.okfignore`
+## `.okflintignore`
 
 Bundles often contain non-concept Markdown (READMEs, specs). Since OKF treats
 every non-reserved `.md` as a concept document requiring `type`, list such files
-in a `.okfignore` at the bundle root. Dot-directories (`.git`, `.claude`, …) are
+in a `.okflintignore` at the bundle root. Dot-directories (`.git`, `.claude`, …) are
 always skipped.
 
+The older name `.okfignore` is still read; if both files exist, their patterns
+are combined.
+
 ```
-# .okfignore
+# .okflintignore
 README.md
 CONTRIBUTING.md
 docs/            # a directory and everything under it
