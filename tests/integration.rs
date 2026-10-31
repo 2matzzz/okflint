@@ -62,6 +62,15 @@ fn invalid_v2_bundle_has_errors() {
 }
 
 #[test]
+fn non_ascii_timestamp_warns_instead_of_panicking() {
+    let diags = lint(Path::new("tests/fixtures/invalid-v2")).unwrap();
+    assert!(
+        diags.iter().any(|d| d.code == "OKF010" && d.path.ends_with("nonascii-time.md")),
+        "expected OKF010 for the non-ASCII timestamp, got: {diags:#?}"
+    );
+}
+
+#[test]
 fn missing_root_is_an_error() {
     assert!(lint(Path::new("tests/fixtures/does-not-exist")).is_err());
 }

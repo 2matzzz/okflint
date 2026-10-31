@@ -203,7 +203,7 @@ struct SourceEntry {
 
 /// Structured view of the v0.2 families, extracted once per document.
 #[derive(Debug, Default)]
-struct V2 {
+pub struct V2 {
     generated_by: Option<(String, usize)>,
     generated_at: Option<(String, usize)>,
     generated_present: bool,
@@ -235,7 +235,7 @@ struct V2 {
 }
 
 /// Extract the v0.2 families from raw frontmatter lines.
-fn extract_v2(doc: &Doc) -> V2 {
+pub fn extract_v2(doc: &Doc) -> V2 {
     let mut v = V2::default();
     if !doc.has_frontmatter || !doc.fm_closed {
         return v;
@@ -644,9 +644,8 @@ fn parse_parameters_list(block: &[parse::FmLine]) -> Vec<(Option<(String, usize)
 }
 
 /// OKF009 — `status` must be `draft | stable | deprecated` (§5.4).
-pub fn check_status(rel: &str, doc: &Doc, out: &mut Vec<Diagnostic>) {
-    let v = extract_v2(doc);
-    if let Some((val, line)) = v.status {
+pub fn check_status(rel: &str, v: &V2, out: &mut Vec<Diagnostic>) {
+    if let Some((val, line)) = v.status.clone() {
         if !val.is_empty() && !matches!(val.as_str(), "draft" | "stable" | "deprecated") {
             out.push(Diagnostic::warning(
                 rel,
@@ -661,13 +660,12 @@ pub fn check_status(rel: &str, doc: &Doc, out: &mut Vec<Diagnostic>) {
 /// OKF010 — v0.2 timestamps must be ISO 8601 datetimes with an explicit UTC
 /// offset (§5): `generated.at`, each `verified[].at`, `stale_after`, each
 /// `sources[].last_modified`, and every `usage_window` `from`/`to`.
-pub fn check_timestamps(rel: &str, doc: &Doc, out: &mut Vec<Diagnostic>) {
-    let v = extract_v2(doc);
+pub fn check_timestamps(rel: &str, v: &V2, out: &mut Vec<Diagnostic>) {
     let mut items: Vec<(&str, Option<(String, usize)>)> = Vec::new();
-    items.push(("generated.at", v.generated_at));
-    items.push(("stale_after", v.stale_after));
-    items.push(("usage_window.from", v.top_window_from));
-    items.push(("usage_window.to", v.top_window_to));
+    items.push(("generated.at", v.generated_at.clone()));
+    items.push(("stale_after", v.stale_after.clone()));
+    items.push(("usage_window.from", v.top_window_from.clone()));
+    items.push(("usage_window.to", v.top_window_to.clone()));
     for e in &v.verified {
         items.push(("verified.at", e.at.clone()));
     }
@@ -694,12 +692,10 @@ pub fn check_timestamps(rel: &str, doc: &Doc, out: &mut Vec<Diagnostic>) {
 /// `<producer>/<version>` for agents/tools, `human:<id>` for people,
 /// `process:<id>` for automated processes (plus the `team:<id>` form used
 /// for source authorship in §5.1 examples).
-pub fn check_actors(rel: &str, doc: &Doc, out: &mut Vec<Diagnostic>) {
-    let v = extract_v2(doc);
+pub fn check_actors(rel: &str, v: &V2, out: &mut Vec<Diagnostic>) {
     let mut items: Vec<(&str, Option<(String, usize)>)> = Vec::new();
-    items.push(("generated.by", v.generated_by));
-    for (i, e) in v.verified.iter().enumerate() {
-        let _ = i;
+    items.push(("generated.by", v.generated_by.clone()));
+    for e in v.verified.iter() {
         items.push(("verified.by", e.by.clone()));
     }
     for s in &v.sources {
@@ -746,8 +742,7 @@ pub fn is_valid_actor(s: &str) -> bool {
 /// `generated.by`, each `verified` entry's `by`/`at`, each `sources` entry's
 /// `resource`, each `parameters` entry's `name`, `executor.resource`,
 /// `attester.resource`, and `usage_window` `from`/`to`.
-pub fn check_structure(rel: &str, doc: &Doc, out: &mut Vec<Diagnostic>) {
-    let v = extract_v2(doc);
+pub fn check_structure(rel: &str, doc: &Doc, v: &V2, out: &mut Vec<Diagnostic>) {
 
     if let Some(line) = v.generated_malformed {
         out.push(Diagnostic::warning(
@@ -882,8 +877,7 @@ pub fn check_structure(rel: &str, doc: &Doc, out: &mut Vec<Diagnostic>) {
 /// - OKF013 (error): `type: Attested Computation` carries no `runtime`.
 /// - OKF014 (warning): neither an inline `# Computation` fenced block nor a
 ///   `computation:` path names the computation.
-pub fn check_attested(rel: &str, doc: &Doc, content: &str, out: &mut Vec<Diagnostic>) {
-    let v = extract_v2(doc);
+pub fn check_attested(rel: &str, doc: &Doc, v: &V2, content: &str, out: &mut Vec<Diagnostic>) {
     let is_attested = matches!(v.concept_type.as_deref(), Some(t) if t.trim() == "Attested Computation");
     if !is_attested {
         return;
@@ -952,8 +946,7 @@ fn has_computation_fence(content: &str) -> bool {
 /// OKF015 — per-claim attribution (§5.1): every `[^id]` footnote in the body
 /// should resolve to a `sources[].id`. Only checked when the document
 /// declares `sources`; otherwise footnotes are ordinary markdown.
-pub fn check_footnotes(rel: &str, doc: &Doc, content: &str, out: &mut Vec<Diagnostic>) {
-    let v = extract_v2(doc);
+pub fn check_footnotes(rel: &str, v: &V2, content: &str, out: &mut Vec<Diagnostic>) {
     if !v.sources_present || v.sources.is_empty() {
         return;
     }
@@ -1120,14 +1113,17 @@ pub fn is_iso_8601(s: &str) -> bool {
     if is_iso_date(s) {
         return true;
     }
-    if s.len() < 11 || !is_iso_date(&s[0..10]) {
+    // `get` rather than slicing: a multi-byte char may straddle byte 10 or 11.
+    match s.get(0..10) {
+        Some(date) if is_iso_date(date) => {}
+        _ => return false,
+    }
+    if !matches!(s.as_bytes().get(10), Some(b'T' | b' ')) {
         return false;
     }
-    let sep = s.as_bytes()[10];
-    if sep != b'T' && sep != b' ' {
+    let Some(mut rest) = s.get(11..) else {
         return false;
-    }
-    let mut rest = &s[11..];
+    };
     if let Some(stripped) = rest.strip_suffix('Z') {
         rest = stripped;
     } else if let Some(pos) = rest.rfind(['+', '-']) {
@@ -1144,14 +1140,17 @@ pub fn is_iso_8601(s: &str) -> bool {
 /// `2026-06-30T14:00:00Z` or `2026-06-17T15:00:00+09:00`. A bare date or a
 /// datetime without an offset is rejected.
 pub fn is_iso_datetime_with_offset(s: &str) -> bool {
-    if s.len() < 11 || !is_iso_date(&s[0..10]) {
+    // `get` rather than slicing: a multi-byte char may straddle byte 10 or 11.
+    match s.get(0..10) {
+        Some(date) if is_iso_date(date) => {}
+        _ => return false,
+    }
+    if !matches!(s.as_bytes().get(10), Some(b'T' | b' ')) {
         return false;
     }
-    let sep = s.as_bytes()[10];
-    if sep != b'T' && sep != b' ' {
+    let Some(mut rest) = s.get(11..) else {
         return false;
-    }
-    let mut rest = &s[11..];
+    };
     if let Some(stripped) = rest.strip_suffix('Z') {
         rest = stripped;
         return !rest.is_empty() && is_time(rest);

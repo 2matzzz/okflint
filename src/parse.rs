@@ -63,7 +63,6 @@ impl Doc {
     pub fn field(&self, key: &str) -> Option<&Field> {
         self.fields.iter().find(|f| f.key == key)
     }
-
 }
 
 /// Parse a document's frontmatter. The body itself is not interpreted here;
@@ -149,22 +148,6 @@ pub fn parse_flow_map(s: &str) -> Vec<(String, String)> {
         }
     }
     out
-}
-
-/// Parse an inline flow list `[a, b, c]` into items.
-/// Returns an empty vec when `s` is not a `[...]` list.
-#[allow(dead_code)]
-pub fn parse_flow_list(s: &str) -> Vec<String> {
-    let s = s.trim();
-    if !(s.starts_with('[') && s.ends_with(']')) {
-        return Vec::new();
-    }
-    let inner = &s[1..s.len() - 1];
-    split_flow(inner, ',')
-        .iter()
-        .map(|p| strip_quotes(p.trim()).to_string())
-        .filter(|p| !p.is_empty())
-        .collect()
 }
 
 /// Split on a delimiter, ignoring delimiters inside single/double quotes.

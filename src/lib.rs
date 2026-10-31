@@ -124,12 +124,13 @@ fn check_file(root: &Path, path: &Path, all_files: &HashSet<String>, out: &mut V
             checks::check_concept_type(&rel, &doc, out);
             // v0.2 trust / lifecycle / provenance / computation families (§5, §10).
             // All optional; absence is never a finding.
-            checks::check_status(&rel, &doc, out);
-            checks::check_timestamps(&rel, &doc, out);
-            checks::check_actors(&rel, &doc, out);
-            checks::check_structure(&rel, &doc, out);
-            checks::check_attested(&rel, &doc, &content, out);
-            checks::check_footnotes(&rel, &doc, &content, out);
+            let v2 = checks::extract_v2(&doc);
+            checks::check_status(&rel, &v2, out);
+            checks::check_timestamps(&rel, &v2, out);
+            checks::check_actors(&rel, &v2, out);
+            checks::check_structure(&rel, &doc, &v2, out);
+            checks::check_attested(&rel, &doc, &v2, &content, out);
+            checks::check_footnotes(&rel, &v2, &content, out);
         }
     }
 
