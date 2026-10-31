@@ -79,9 +79,12 @@ fn lint_parallel(root: &Path, files: &[std::path::PathBuf], all_files: &HashSet<
                 })
             })
             .collect();
+        // Re-raise a worker panic so a large bundle fails the same way the
+        // sequential path does, instead of silently dropping that chunk.
         for handle in handles {
-            if let Ok(local) = handle.join() {
-                out.extend(local);
+            match handle.join() {
+                Ok(local) => out.extend(local),
+                Err(payload) => std::panic::resume_unwind(payload),
             }
         }
     });
